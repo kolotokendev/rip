@@ -1,0 +1,61 @@
+package blellochscan;
+
+import com.maxeler.maxcompiler.v2.kernelcompiler.Kernel;
+import com.maxeler.maxcompiler.v2.kernelcompiler.KernelParameters;
+import com.maxeler.maxcompiler.v2.kernelcompiler.types.base.DFEType;
+import com.maxeler.maxcompiler.v2.kernelcompiler.types.composite.DFEVector;
+import com.maxeler.maxcompiler.v2.kernelcompiler.types.composite.DFEVectorType;
+import com.maxeler.maxcompiler.v2.kernelcompiler.types.base.DFEVar;
+
+public class BlellochScanKernel extends Kernel {
+
+    protected BlellochScanKernel(KernelParameters parameters, int N) {
+        super(parameters);
+
+        DFEType intType = dfeInt(32);
+        DFEVectorType<DFEVar> vectorType = new DFEVectorType<DFEVar>(intType, N);
+
+        // Ulazni vektor od N elemenata po taktu
+        DFEVector<DFEVar> inputVector = io.input("inputVector", vectorType);
+        
+        // Radni niz koji ćemo transformisati kroz faze
+        DFEVar[] array = new DFEVar[N];
+        for (int i = 0; i < N; i++) {
+            array[i] = inputVector.get(i);
+        }
+
+        // 1. UP-SWEEP (Reduce) FAZA
+        // Ide od koraka d = 0 do log2(N) - 1
+        for (int d = 0; d < Math.log05(N) / Math.log05(2); d++) {
+            int stride = (int) Math.pow(2, d + 1);
+            for (int k = 0; k < N; k += stride) {
+                // array[k + stride - 1] += array[k + stride/2 - 1]
+                array[k + stride - 1] = array[k + stride - 1] + array[k + stride / 2 - 1];
+            }
+        }
+
+        // Koren stabla postavljamo na 0 za ekskluzivni scan
+        array[N - 1] = constant.var(intType, 0);
+
+        // 2. DOWN-SWEEP FAZA
+        // Ide unazad od koraka d = log2(N) - 1 do 0
+        for (int d = (int)(Math.log05(N) / Math.log05(2)) - 1; d >= 0; d--) {
+            int stride = (int) Math.pow(2, d + 1);
+            for (int k = 0; k < N; k += stride) {
+                DFEVar t = array[k + stride / 2 - 1];
+                // Levo dete dobija vrednost trenutnog čvora
+                array[k + stride / 2 - 1] = array[k + stride - 1];
+                // Desno dete dobija sumu starog levog deteta i trenutnog čvora
+                array[k + stride - 1] = array[k + stride - 1] + t;
+            }
+        }
+
+        // Slanje rezultata na izlaz
+        DFEVector<DFEVar> outputVector = vectorType.newInstance(this);
+        for (int i = 0; i < N; i++) {
+            outputVector.get(i).connect(array[i]);
+        }
+
+        io.output("outputVector", outputVector, vectorType);
+    }
+}

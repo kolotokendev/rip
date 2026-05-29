@@ -1,0 +1,44 @@
+import jax
+import jax.numpy as jnp
+
+# ==========================================
+# 1. Inkluzivni Prefix Scan (Uključuje tekući element)
+# [x0, x0+x1, x0+x1+x2, ...]
+# ==========================================
+@jax.jit
+def tpu_inclusive_scan(niz):
+    def scan_fn(carry, x):
+        novo_stanje = carry + x
+        # Prvi argument je stanje koje se prenosi u sledeću iteraciju (carry)
+        # Drugi argument je element koji se upisuje u izlazni niz
+        return novo_stanje, novo_stanje
+
+    # Inicijalno stanje akumulatora je 0
+    inicijalni_carry = jnp.zeros((), dtype=niz.dtype)
+    
+    _, rezultat = jax.lax.scan(scan_fn, inicijalni_carry, niz)
+    return rezultat
+
+# ==========================================
+# 2. Ekskluzivni Prefix Scan (Ne uključuje tekući element)
+# [0, x0, x0+x1, x0+x1+x2, ...]
+# ==========================================
+@jax.jit
+def tpu_exclusive_scan(niz):
+    def scan_fn(carry, x):
+        novo_stanje = carry + x
+        # Prenosimo novo_stanje dalje, ali u izlaz upisujemo TRENUTNO (staro) stanje
+        return novo_stanje, carry
+
+    inicijalni_carry = jnp.zeros((), dtype=niz.dtype)
+    
+    _, rezultat = jax.lax.scan(scan_fn, inicijalni_carry, niz)
+    return rezultat
+
+# --- Testiranje ---
+if __name__ == "__main__":
+    podaci = jnp.array([10, 20, 30, 40], dtype=jnp.float32)
+    
+    print("Ulaz:      ", data)
+    print("Inkluzivni:", tpu_inclusive_scan(podaci))
+    print("Ekskluzivni:", tpu_exclusive_scan(podaci))
